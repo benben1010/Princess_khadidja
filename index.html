@@ -10,7 +10,6 @@
       --bg1:#07081a;
       --bg2:#120a2a;
       --pink:#ff4fa3;
-      --pink2:#ff8acb;
       --cyan:#7de3ff;
       --card: rgba(20, 14, 44, .78);
       --stroke: rgba(255,255,255,.14);
@@ -39,6 +38,7 @@
       width:100%;
       height:100%;
       display:block;
+      touch-action: none; /* IMPORTANT for dragging on mobile */
     }
 
     .ui{
@@ -81,7 +81,6 @@
       margin:0;
       font-size: 14px;
       font-weight: 900;
-      letter-spacing:.2px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -134,7 +133,6 @@
     .btn:active{ transform: translateY(0); }
     .btn.primary{ border-color: rgba(255,79,163,.5); }
 
-    /* Bottom message card */
     .card{
       position: fixed;
       left: 50%;
@@ -224,7 +222,6 @@
       font-size: 13px;
     }
 
-    /* Win overlay */
     .win{
       position: fixed;
       inset: 0;
@@ -261,7 +258,6 @@
       text-shadow: 0 0 22px rgba(255,79,163,.35);
     }
 
-    /* Cute heart bounce under the final message */
     .heartRow{
       margin-top: 12px;
       font-size: 20px;
@@ -296,7 +292,7 @@
       <div class="brandDot"></div>
       <div class="titleWrap">
         <p class="title" id="uiTitle">Find the stars to complete your name 💗</p>
-        <p class="sub" id="uiSub">Some stars hide letters… and the pink hearts are included.</p>
+        <p class="sub" id="uiSub">Tap stars to play — drag a star OR drag the background to move the whole sky.</p>
       </div>
       <div class="pill" id="foundCount">0/0</div>
     </div>
@@ -309,7 +305,7 @@
   </div>
 
   <div class="centerHint" id="centerHint">
-    <div class="bubble" id="centerBubble">Tap a star to start ✨</div>
+    <div class="bubble" id="centerBubble">Tap a star ✨ (drag a star or drag the sky to move everything)</div>
   </div>
 
   <div class="card hidden" id="card" role="status" aria-live="polite">
@@ -331,9 +327,7 @@
     <div class="winBox">
       <h2>You completed it ✨</h2>
       <div class="name" id="winName"></div>
-
       <div id="winText" style="margin-top: 10px;"></div>
-
       <div style="margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
         <button class="btn primary" id="playAgainBtn">Play again</button>
         <button class="btn" id="closeWinBtn">Close</button>
@@ -373,9 +367,7 @@
   // UI ELEMENTS
   // =======================
   const uiTitle = document.getElementById("uiTitle");
-  const uiSub = document.getElementById("uiSub");
   const centerBubble = document.getElementById("centerBubble");
-
   const centerHint = document.getElementById("centerHint");
   const foundCount = document.getElementById("foundCount");
 
@@ -398,25 +390,22 @@
   const closeWinBtn = document.getElementById("closeWinBtn");
 
   uiTitle.textContent = `Find the stars to complete your name, ${DISPLAY_NAME} 💗`;
-  uiSub.textContent = "Some stars hide letters… and the pink hearts are included.";
-  centerBubble.textContent = `Tap a star to start ✨ (there are ${TARGET_NAME.length} hidden letters)`;
+  centerBubble.textContent = `Tap a star ✨ (drag a star or drag the sky to move everything)`;
 
   // =======================
   // TYPEWRITER EFFECT
   // =======================
-  let typingId = 0; // cancels previous typing when new text appears
+  let typingId = 0;
+  const style = document.createElement("style");
+  style.textContent = `@keyframes blink{50%{opacity:0}}`;
+  document.head.appendChild(style);
 
   function typewriter(el, text, options = {}) {
-    const {
-      speed = 22,          // ms per character
-      startDelay = 0,      // ms
-      cursor = false,      // show cursor
-      onDone = null
-    } = options;
-
+    const { speed = 22, startDelay = 0, cursor = false, onDone = null } = options;
     const myId = ++typingId;
+
     el.textContent = "";
-    el.dataset.fullText = text; // for skip
+    el.dataset.fullText = text;
     el.dataset.typing = "1";
 
     let i = 0;
@@ -432,66 +421,34 @@
       el.appendChild(cursorEl);
     }
 
-    const start = () => {
-      const tick = () => {
-        if (myId !== typingId) return; // cancelled
-
-        // If user skipped
-        if (el.dataset.typing === "0") {
-          finish();
-          return;
-        }
-
-        if (i >= text.length) {
-          finish();
-          return;
-        }
-
-        // insert next char before cursor
-        const ch = text[i++];
-        if (cursorEl) {
-          cursorEl.insertAdjacentText("beforebegin", ch);
-        } else {
-          el.textContent += ch;
-        }
-        setTimeout(tick, speed);
-      };
-
-      tick();
-    };
-
     const finish = () => {
       if (myId !== typingId) return;
       el.dataset.typing = "0";
-      if (cursorEl) {
-        // rebuild clean text (without cursor)
-        el.textContent = text;
-      } else {
-        el.textContent = text;
-      }
+      el.textContent = text;
       if (typeof onDone === "function") onDone();
     };
 
+    const tick = () => {
+      if (myId !== typingId) return;
+      if (el.dataset.typing === "0") { finish(); return; }
+      if (i >= text.length) { finish(); return; }
+
+      const ch = text[i++];
+      if (cursorEl) cursorEl.insertAdjacentText("beforebegin", ch);
+      else el.textContent += ch;
+
+      setTimeout(tick, speed);
+    };
+
+    const start = () => tick();
     if (startDelay > 0) setTimeout(() => { if (myId === typingId) start(); }, startDelay);
     else start();
 
-    // return a skip function
-    return () => {
-      if (myId !== typingId) return;
-      el.dataset.typing = "0";
-    };
+    return () => { if (myId === typingId) el.dataset.typing = "0"; };
   }
 
-  // Add blinking cursor keyframes (injected)
-  const style = document.createElement("style");
-  style.textContent = `@keyframes blink{50%{opacity:0}}`;
-  document.head.appendChild(style);
-
-  // allow skip typing by tapping/clicking card
-  function enableSkipOnCard(currentSkipFn){
-    const handler = () => {
-      if (currentSkipFn) currentSkipFn();
-    };
+  function enableSkipOnCard(skipFn){
+    const handler = () => { if (skipFn) skipFn(); };
     card.addEventListener("pointerdown", handler, { once: true });
   }
 
@@ -517,9 +474,7 @@
   function rand(min,max){ return min + Math.random()*(max-min); }
   function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-  // =======================
-  // YOUR ROMANTIC "FOUND LETTER" MESSAGES (verbatim)
-  // =======================
+  // YOUR “FOUND LETTER” MESSAGES (verbatim)
   const romanticCorrectMessages = [
     "Careful… every time you click a star my heart skips a beat 💗",
     "That was smooth… are you always this charming? 😌",
@@ -594,14 +549,12 @@
   }
 
   // =======================
-  // STAR + GAME LOGIC
+  // STARS
   // =======================
   function updateProgressUI(){
     foundCount.textContent = `${foundTotal}/${totalLetters}`;
   }
-  function isWin(){
-    return foundTotal === totalLetters;
-  }
+  function isWin(){ return foundTotal === totalLetters; }
 
   function makeStars(){
     stars = [];
@@ -639,7 +592,10 @@
         isLetterStar,
         letter: letterInfo?.letter ?? "",
         pos: letterInfo?.pos ?? -1,
-        revealed: false
+        revealed: false,
+        dragging: false,
+        savedVx: 0,
+        savedVy: 0
       });
     }
 
@@ -658,20 +614,16 @@
     return best;
   }
 
-  // showCard now types the main message text
   function showCard({type, text, meta, letter}){
     badge.textContent = (type === "correct") ? "💗" : "✨";
     cardLabel.textContent = (type === "correct") ? "Letter found!" : "Star message";
     letterPill.textContent = letter ? `Letter: ${letter}` : "Letter: —";
     card.classList.remove("hidden");
-
-    // reset meta while typing
     cardMeta.textContent = "";
 
     centerHint.style.opacity = "0";
     centerHint.style.transition = "opacity .35s ease";
 
-    // type the body, then show meta
     const skip = typewriter(cardBody, text, {
       speed: 18,
       cursor: true,
@@ -681,7 +633,6 @@
     enableSkipOnCard(skip);
   }
 
-  // Win screen uses typing too
   function winSequence(){
     winText.innerHTML = `
       <div style="font-size:22px; font-weight:950; line-height:1.35;">
@@ -708,161 +659,21 @@
       cursor: true,
       onDone: () => {
         heartRow.style.display = "block";
-        if (SIGNATURE) {
-          sig.textContent = SIGNATURE;
-          sig.style.display = "block";
-        }
+        if (SIGNATURE) { sig.textContent = SIGNATURE; sig.style.display = "block"; }
       }
     });
 
-    // Tap win box to skip typing
     win.addEventListener("pointerdown", () => skip(), { once:true });
 
-    // celebration hearts
     for(let k=0;k<22;k++){
       spawnHearts(rand(W*0.25, W*0.75), rand(H*0.35, H*0.7), 4);
     }
   }
 
   // =======================
-  // ANIMATION LOOP
+  // TAP ACTION (used when no drag)
   // =======================
-  let t=0;
-  function step(){
-    t += 1;
-    ctx.clearRect(0,0,W,H);
-
-    // move stars
-    for(const s of stars){
-      s.x += s.vx;
-      s.y += s.vy;
-
-      if(s.x < -20) s.x = W+20;
-      if(s.x > W+20) s.x = -20;
-      if(s.y < -20) s.y = H+20;
-      if(s.y > H+20) s.y = -20;
-
-      s.pulse *= 0.92;
-      if(s.pulse < 0.001) s.pulse = 0;
-    }
-
-    // links
-    ctx.save();
-    ctx.lineWidth = 1;
-    for(let i=0;i<stars.length;i++){
-      for(let j=i+1;j<stars.length;j++){
-        const a = stars[i], b = stars[j];
-        const d = Math.hypot(a.x-b.x, a.y-b.y);
-        if(d < config.maxLinkDist){
-          const alpha = (1 - d/config.maxLinkDist) * 0.55;
-          const boost = (a.isLetterStar || b.isLetterStar) ? 1.35 : 1;
-
-          const r = 255;
-          const g = (a.isLetterStar || b.isLetterStar) ? 120 : 227;
-          const bb = (a.isLetterStar || b.isLetterStar) ? 190 : 255;
-
-          ctx.strokeStyle = `rgba(${r},${g},${bb},${alpha * 0.28 * boost})`;
-          ctx.beginPath();
-          ctx.moveTo(a.x,a.y);
-          ctx.lineTo(b.x,b.y);
-          ctx.stroke();
-        }
-      }
-    }
-    ctx.restore();
-
-    const hoverIndex = pickStar(mouse.x, mouse.y);
-
-    // stars
-    for(let i=0;i<stars.length;i++){
-      const s = stars[i];
-      const isHover = i===hoverIndex;
-
-      const tw = (Math.sin(t*config.twinkleSpeed + s.phase)+1)/2;
-      const glow = 0.35 + tw*0.65;
-
-      const hoverBoost = isHover ? 1.4 : 1;
-      const pulseBoost = 1 + s.pulse*1.8;
-
-      const letterBoost = s.isLetterStar ? 1.32 : 1;
-      const rr = s.r * hoverBoost * pulseBoost * letterBoost;
-
-      ctx.save();
-
-      const grd = ctx.createRadialGradient(s.x,s.y,0, s.x,s.y, rr*10);
-      const glowColor = s.isLetterStar ? "255,79,163" : "255,255,255";
-      const a1 = s.isLetterStar ? 0.36 : 0.22;
-      grd.addColorStop(0, `rgba(255,255,255,${0.85*glow})`);
-      grd.addColorStop(0.35, `rgba(${glowColor},${a1*glow})`);
-      grd.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.arc(s.x,s.y, rr*10, 0, Math.PI*2);
-      ctx.fill();
-
-      ctx.fillStyle = s.isLetterStar ? "rgba(255,236,246,.98)" : (isHover ? "rgba(255,255,255,.98)" : "rgba(247,245,255,.92)");
-      ctx.beginPath();
-      ctx.arc(s.x,s.y, rr, 0, Math.PI*2);
-      ctx.fill();
-
-      ctx.fillStyle = "rgba(125,227,255,.35)";
-      ctx.beginPath();
-      ctx.arc(s.x-rr*0.25, s.y-rr*0.25, Math.max(0.6, rr*0.35), 0, Math.PI*2);
-      ctx.fill();
-
-      if(s.revealed){
-        ctx.strokeStyle = "rgba(255,79,163,.40)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(s.x,s.y, rr*2.6, 0, Math.PI*2);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-
-    // hearts
-    for(let i=hearts.length-1; i>=0; i--){
-      const p = hearts[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.02;
-      p.rot += p.vr;
-      p.life -= 1;
-      p.alpha = Math.max(0, p.life / 70);
-
-      drawHeart(p.x, p.y, p.size, p.alpha, p.rot);
-
-      if(p.life <= 0) hearts.splice(i,1);
-    }
-
-    document.body.style.cursor = (hoverIndex !== -1) ? "pointer" : "default";
-    requestAnimationFrame(step);
-  }
-
-  // =======================
-  // INPUT
-  // =======================
-  function pointerPos(e){
-    const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-  }
-
-  canvas.addEventListener("pointermove", (e) => {
-    const p = pointerPos(e);
-    mouse.x = p.x; mouse.y = p.y;
-  });
-  canvas.addEventListener("pointerleave", () => {
-    mouse.x = -9999; mouse.y = -9999;
-  });
-
-  canvas.addEventListener("pointerdown", (e) => {
-    if(win.classList.contains("show")) return;
-
-    const p = pointerPos(e);
-    const idx = pickStar(p.x, p.y);
-    if(idx === -1) return;
-
+  function handleStarTap(idx){
     const s = stars[idx];
     s.pulse = 1;
 
@@ -907,9 +718,262 @@
         letter: ""
       });
     }
+  }
+
+  // =======================
+  // DRAG SYSTEM: STAR OR WHOLE SKY
+  // =======================
+  let interactionMode = "none"; // "star" | "pan" | "none"
+  let activeStarIndex = -1;
+  let pointerDown = null;
+  let starDown = null;
+  let movedEnough = false;
+  const DRAG_THRESHOLD = 7;
+
+  function pointerPos(e){
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function panWorld(dx, dy){
+    // Move everything (stars + hearts) by delta
+    for (const s of stars){
+      s.x += dx;
+      s.y += dy;
+      // wrap to keep them in view
+      if(s.x < -20) s.x = W+20;
+      if(s.x > W+20) s.x = -20;
+      if(s.y < -20) s.y = H+20;
+      if(s.y > H+20) s.y = -20;
+    }
+    for (const h of hearts){
+      h.x += dx;
+      h.y += dy;
+    }
+  }
+
+  // Track hover
+  canvas.addEventListener("pointermove", (e) => {
+    const p = pointerPos(e);
+    mouse.x = p.x; mouse.y = p.y;
+  });
+  canvas.addEventListener("pointerleave", () => {
+    mouse.x = -9999; mouse.y = -9999;
   });
 
+  canvas.addEventListener("pointerdown", (e) => {
+    if(win.classList.contains("show")) return;
+
+    const p = pointerPos(e);
+    const idx = pickStar(p.x, p.y);
+
+    pointerDown = { x: p.x, y: p.y };
+    movedEnough = false;
+
+    if(idx !== -1){
+      // Start STAR drag attempt
+      interactionMode = "star";
+      activeStarIndex = idx;
+
+      starDown = { x: stars[idx].x, y: stars[idx].y };
+
+      const s = stars[idx];
+      s.dragging = true;
+      s.savedVx = s.vx;
+      s.savedVy = s.vy;
+      s.vx = 0; s.vy = 0;
+    } else {
+      // Start PAN (drag whole design)
+      interactionMode = "pan";
+      activeStarIndex = -1;
+      starDown = null;
+    }
+
+    canvas.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  });
+
+  window.addEventListener("pointermove", (e) => {
+    if(interactionMode === "none" || !pointerDown) return;
+
+    const p = pointerPos(e);
+    const dx = p.x - pointerDown.x;
+    const dy = p.y - pointerDown.y;
+
+    if(!movedEnough && Math.hypot(dx,dy) > DRAG_THRESHOLD) movedEnough = true;
+
+    if(interactionMode === "star"){
+      if(movedEnough && activeStarIndex !== -1){
+        const s = stars[activeStarIndex];
+        s.x = Math.max(10, Math.min(W-10, starDown.x + dx));
+        s.y = Math.max(10, Math.min(H-10, starDown.y + dy));
+      }
+    } else if(interactionMode === "pan"){
+      // Pan smoothly even for small movements
+      panWorld(dx, dy);
+      // update anchor so movement is incremental (smooth)
+      pointerDown = { x: p.x, y: p.y };
+    }
+
+    e.preventDefault();
+  }, { passive:false });
+
+  window.addEventListener("pointerup", (e) => {
+    if(interactionMode === "none") return;
+
+    // STAR mode: restore movement + tap if not dragged
+    if(interactionMode === "star" && activeStarIndex !== -1){
+      const s = stars[activeStarIndex];
+      s.dragging = false;
+      s.vx = s.savedVx || rand(-config.drift, config.drift);
+      s.vy = s.savedVy || rand(-config.drift, config.drift);
+
+      if(!movedEnough){
+        handleStarTap(activeStarIndex);
+      }
+    }
+
+    interactionMode = "none";
+    activeStarIndex = -1;
+    pointerDown = null;
+    starDown = null;
+    movedEnough = false;
+
+    canvas.releasePointerCapture?.(e.pointerId);
+    e.preventDefault();
+  }, { passive:false });
+
+  window.addEventListener("pointercancel", () => {
+    if(interactionMode === "star" && activeStarIndex !== -1){
+      const s = stars[activeStarIndex];
+      s.dragging = false;
+      s.vx = s.savedVx || rand(-config.drift, config.drift);
+      s.vy = s.savedVy || rand(-config.drift, config.drift);
+    }
+    interactionMode = "none";
+    activeStarIndex = -1;
+    pointerDown = null;
+    starDown = null;
+    movedEnough = false;
+  });
+
+  // =======================
+  // ANIMATION LOOP
+  // =======================
+  let t=0;
+  function step(){
+    t += 1;
+    ctx.clearRect(0,0,W,H);
+
+    // move stars unless they're being dragged
+    for(const s of stars){
+      if(!s.dragging){
+        s.x += s.vx;
+        s.y += s.vy;
+        if(s.x < -20) s.x = W+20;
+        if(s.x > W+20) s.x = -20;
+        if(s.y < -20) s.y = H+20;
+        if(s.y > H+20) s.y = -20;
+      }
+      s.pulse *= 0.92;
+      if(s.pulse < 0.001) s.pulse = 0;
+    }
+
+    // links
+    ctx.save();
+    ctx.lineWidth = 1;
+    for(let i=0;i<stars.length;i++){
+      for(let j=i+1;j<stars.length;j++){
+        const a = stars[i], b = stars[j];
+        const d = Math.hypot(a.x-b.x, a.y-b.y);
+        if(d < config.maxLinkDist){
+          const alpha = (1 - d/config.maxLinkDist) * 0.55;
+          const boost = (a.isLetterStar || b.isLetterStar) ? 1.35 : 1;
+
+          const r = 255;
+          const g = (a.isLetterStar || b.isLetterStar) ? 120 : 227;
+          const bb = (a.isLetterStar || b.isLetterStar) ? 190 : 255;
+
+          ctx.strokeStyle = `rgba(${r},${g},${bb},${alpha * 0.28 * boost})`;
+          ctx.beginPath();
+          ctx.moveTo(a.x,a.y);
+          ctx.lineTo(b.x,b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+
+    // hover
+    const hoverIndex = pickStar(mouse.x, mouse.y);
+
+    // stars
+    for(let i=0;i<stars.length;i++){
+      const s = stars[i];
+      const isHover = i===hoverIndex;
+
+      const tw = (Math.sin(t*config.twinkleSpeed + s.phase)+1)/2;
+      const glow = 0.35 + tw*0.65;
+
+      const hoverBoost = isHover ? 1.4 : 1;
+      const pulseBoost = 1 + s.pulse*1.8;
+      const letterBoost = s.isLetterStar ? 1.32 : 1;
+      const dragBoost = s.dragging ? 1.25 : 1;
+      const rr = s.r * hoverBoost * pulseBoost * letterBoost * dragBoost;
+
+      ctx.save();
+      const grd = ctx.createRadialGradient(s.x,s.y,0, s.x,s.y, rr*10);
+      const glowColor = s.isLetterStar ? "255,79,163" : "255,255,255";
+      const a1 = s.isLetterStar ? 0.36 : 0.22;
+      grd.addColorStop(0, `rgba(255,255,255,${0.85*glow})`);
+      grd.addColorStop(0.35, `rgba(${glowColor},${a1*glow})`);
+      grd.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(s.x,s.y, rr*10, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.fillStyle = s.isLetterStar ? "rgba(255,236,246,.98)" : (isHover ? "rgba(255,255,255,.98)" : "rgba(247,245,255,.92)");
+      ctx.beginPath();
+      ctx.arc(s.x,s.y, rr, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(125,227,255,.35)";
+      ctx.beginPath();
+      ctx.arc(s.x-rr*0.25, s.y-rr*0.25, Math.max(0.6, rr*0.35), 0, Math.PI*2);
+      ctx.fill();
+
+      if(s.revealed){
+        ctx.strokeStyle = "rgba(255,79,163,.40)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(s.x,s.y, rr*2.6, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // hearts
+    for(let i=hearts.length-1; i>=0; i--){
+      const p = hearts[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.02;
+      p.rot += p.vr;
+      p.life -= 1;
+      p.alpha = Math.max(0, p.life / 70);
+      drawHeart(p.x, p.y, p.size, p.alpha, p.rot);
+      if(p.life <= 0) hearts.splice(i,1);
+    }
+
+    document.body.style.cursor = (hoverIndex !== -1) ? "pointer" : "default";
+    requestAnimationFrame(step);
+  }
+
+  // =======================
   // Buttons
+  // =======================
   closeBtn.addEventListener("click", () => card.classList.add("hidden"));
 
   hintBtn.addEventListener("click", () => {
@@ -939,15 +1003,14 @@
     card.classList.add("hidden");
   });
 
-  closeWinBtn.addEventListener("click", () => {
-    win.classList.remove("show");
-  });
+  closeWinBtn.addEventListener("click", () => win.classList.remove("show"));
 
   // Init
   resize();
   makeStars();
   updateProgressUI();
   requestAnimationFrame(step);
+
   window.addEventListener("resize", () => {
     resize();
     makeStars();
